@@ -1,5 +1,6 @@
 import type { ToolHandlerContext } from "@fastgpt-plugin/sdk-factory";
 import { z } from "zod";
+import { resolveUploadFileName } from "../../../utils/fileName";
 
 type UploadContext = Pick<ToolHandlerContext<any>, "invoke">;
 type UploadFileInput = Parameters<UploadContext["invoke"]["uploadFile"]>[0];
@@ -112,6 +113,7 @@ function toUploadContentType(mime: string): UploadFileInput["contentType"] {
 
 export const InputType = z.object({
   base64: z.string().nonempty(),
+  fileName: z.string().optional(),
 });
 
 export const OutputType = z.object({
@@ -119,10 +121,8 @@ export const OutputType = z.object({
 });
 
 export async function tool(
-  {
-    base64,
-  }: z.infer<typeof InputType>,
-  ctx: UploadContext
+  { base64, fileName }: z.infer<typeof InputType>,
+  ctx: UploadContext,
 ): Promise<z.infer<typeof OutputType>> {
   const mime = (() => {
     const match = base64.match(/^data:([^;]+);base64,/);
@@ -145,7 +145,7 @@ export async function tool(
     return m && m.length > 0 ? m : "octet-stream";
   })();
 
-  const filename = `file.${ext}`;
+  const filename = resolveUploadFileName(fileName, "file", ext);
 
   const uploadInput: UploadFileInput = {
     file: toBuffer(base64),
