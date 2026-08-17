@@ -1,6 +1,6 @@
 {
   "name": "@fastgpt-plugins/tool-base64-decode",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Enter a Base64-encoded string and get a text, image, etc.",
   "type": "module",
   "main": "dist/index.js",

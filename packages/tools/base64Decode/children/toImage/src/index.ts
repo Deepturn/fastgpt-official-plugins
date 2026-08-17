@@ -1,8 +1,9 @@
-import type { ToolHandlerContext } from '@fastgpt-plugin/sdk-factory';
-import { z } from 'zod';
+import type { ToolHandlerContext } from "@fastgpt-plugin/sdk-factory";
+import { z } from "zod";
+import { resolveUploadFileName } from "../../../utils/fileName";
 
-type UploadContext = Pick<ToolHandlerContext<any>, 'invoke'>;
-type UploadFileInput = Parameters<UploadContext['invoke']['uploadFile']>[0];
+type UploadContext = Pick<ToolHandlerContext<any>, "invoke">;
+type UploadFileInput = Parameters<UploadContext["invoke"]["uploadFile"]>[0];
 
 /**
  * Detect image MIME type from base64 binary data by checking file signatures
@@ -11,7 +12,7 @@ type UploadFileInput = Parameters<UploadContext['invoke']['uploadFile']>[0];
 function detectImageMimeType(base64Data: string) {
   try {
     // Remove data URL prefix if exists and decode base64
-    const base64Content = base64Data.replace(/^data:[^;]+;base64,/, '');
+    const base64Content = base64Data.replace(/^data:[^;]+;base64,/, "");
     const binaryString = atob(base64Content);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
@@ -20,8 +21,13 @@ function detectImageMimeType(base64Data: string) {
 
     // Check for common image file signatures
     // JPEG: FF D8 FF
-    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-      return 'image/jpeg';
+    if (
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff
+    ) {
+      return "image/jpeg";
     }
 
     // PNG: 89 50 4E 47 0D 0A 1A 0A
@@ -36,7 +42,7 @@ function detectImageMimeType(base64Data: string) {
       bytes[6] === 0x1a &&
       bytes[7] === 0x0a
     ) {
-      return 'image/png';
+      return "image/png";
     }
 
     // GIF: 47 49 46 38 (GIF8)
@@ -47,12 +53,12 @@ function detectImageMimeType(base64Data: string) {
       bytes[2] === 0x46 &&
       bytes[3] === 0x38
     ) {
-      return 'image/gif';
+      return "image/gif";
     }
 
     // BMP: 42 4D
     if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) {
-      return 'image/bmp';
+      return "image/bmp";
     }
 
     // WebP: RIFF + WEBP
@@ -67,7 +73,7 @@ function detectImageMimeType(base64Data: string) {
       bytes[10] === 0x42 &&
       bytes[11] === 0x50
     ) {
-      return 'image/webp';
+      return "image/webp";
     }
 
     // Default to PNG if no signature matches
@@ -80,35 +86,36 @@ function detectImageMimeType(base64Data: string) {
 
 function toBuffer(base64Data: string) {
   const match = base64Data.match(/^data:[^;]+;base64,(.+)$/);
-  return Buffer.from(match?.[1] ?? base64Data, 'base64');
+  return Buffer.from(match?.[1] ?? base64Data, "base64");
 }
 
 function getUploadErrorMessage(error: unknown) {
-  if (!error) return 'Failed to upload file';
+  if (!error) return "Failed to upload file";
   if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  if (typeof error === 'object' && 'reason' in error) {
-    const reason = (error as { reason?: { 'zh-CN'?: string; en?: string } })
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && "reason" in error) {
+    const reason = (error as { reason?: { "zh-CN"?: string; en?: string } })
       .reason;
-    return reason?.['zh-CN'] ?? reason?.en ?? 'Failed to upload file';
+    return reason?.["zh-CN"] ?? reason?.en ?? "Failed to upload file";
   }
-  return 'Failed to upload file';
+  return "Failed to upload file";
 }
 
-function toUploadContentType(mime: string): UploadFileInput['contentType'] {
-  if (mime === 'image/jpeg') return 'image/jpeg';
-  if (mime === 'image/png') return 'image/png';
-  if (mime === 'image/gif') return 'image/gif';
-  if (mime === 'image/webp') return 'image/webp';
-  return 'application/octet-stream';
+function toUploadContentType(mime: string): UploadFileInput["contentType"] {
+  if (mime === "image/jpeg") return "image/jpeg";
+  if (mime === "image/png") return "image/png";
+  if (mime === "image/gif") return "image/gif";
+  if (mime === "image/webp") return "image/webp";
+  return "application/octet-stream";
 }
 
 export const InputType = z.object({
-  base64: z.string().nonempty()
+  base64: z.string().nonempty(),
+  fileName: z.string().optional(),
 });
 
 export const OutputType = z.object({
-  url: z.string()
+  url: z.string(),
 });
 
 /**
@@ -116,10 +123,8 @@ export const OutputType = z.object({
  * Supports both data URL format (with MIME type) and raw base64 (auto-detected)
  */
 export async function tool(
-  {
-    base64
-  }: z.infer<typeof InputType>,
-  ctx: UploadContext
+  { base64, fileName }: z.infer<typeof InputType>,
+  ctx: UploadContext,
 ): Promise<z.infer<typeof OutputType>> {
   // First try to get MIME type from data URL
   const mime = (() => {
@@ -130,23 +135,23 @@ export async function tool(
     const detectedType = detectImageMimeType(base64);
 
     if (!detectedType) {
-      throw new Error('Image Type unknown');
+      throw new Error("Image Type unknown");
     }
     return detectedType;
   })();
 
   const ext = (() => {
-    const m = mime.split('/')[1];
-    return m && m.length > 0 ? m : 'png';
+    const m = mime.split("/")[1];
+    return m && m.length > 0 ? m : "png";
   })();
 
   // Generate filename with appropriate extension
-  const filename = `image.${ext}`;
+  const filename = resolveUploadFileName(fileName, "image", ext);
 
   const uploadInput: UploadFileInput = {
     file: toBuffer(base64),
     fileName: filename,
-    contentType: toUploadContentType(mime)
+    contentType: toUploadContentType(mime),
   };
   const [meta, error] = await ctx.invoke.uploadFile(uploadInput);
 
@@ -155,6 +160,6 @@ export async function tool(
   }
 
   return {
-    url: meta.accessURL
+    url: meta.accessURL,
   };
 }

@@ -18,14 +18,16 @@ import {
 
 const secretSchema = z.object({});
 const toFileSecretSchema = z.object({});
-const toFileInputSchema = z
-  .object({
-    base64: z.string(),
-  });
-const toFileOutputSchema = z
-  .object({
-    url: z.string(),
-  });
+const toFileInputSchema = z.object({
+  base64: z.string(),
+  fileName: z.string().optional().meta({
+    title: "文件名",
+    description: "可选。自定义上传文件名；不含扩展名时会自动补全。",
+  }),
+});
+const toFileOutputSchema = z.object({
+  url: z.string(),
+});
 
 const toFileHandler = createToolHandler({
   inputSchema: toFileInputSchema,
@@ -39,19 +41,21 @@ const toFileHandler = createToolHandler({
 });
 
 const toImageSecretSchema = z.object({});
-const toImageInputSchema = z
-  .object({
-    base64: z.string().meta({
-      title: "Base64 字符串",
-    }),
-  });
-const toImageOutputSchema = z
-  .object({
-    url: z.string().meta({
-      title: "图片 URL",
-      description: "可访问的图片地址: http://example.com",
-    }),
-  });
+const toImageInputSchema = z.object({
+  base64: z.string().meta({
+    title: "Base64 字符串",
+  }),
+  fileName: z.string().optional().meta({
+    title: "文件名",
+    description: "可选。自定义上传文件名；不含扩展名时会自动补全。",
+  }),
+});
+const toImageOutputSchema = z.object({
+  url: z.string().meta({
+    title: "图片 URL",
+    description: "可访问的图片地址: http://example.com",
+  }),
+});
 const toImageHandler = createToolHandler({
   inputSchema: toImageInputSchema,
   outputSchema: toImageOutputSchema,
@@ -64,25 +68,31 @@ const toImageHandler = createToolHandler({
 });
 
 const toTextSecretSchema = z.object({});
-const toTextInputSchema = z
-  .object({
-    base64: z.string().meta({
-      title: "Base64 字符串",
-    }),
-  });
-const toTextOutputSchema = z
-  .object({
-    text: z.string().meta({
-      title: "文本",
-    }),
-  });
+const toTextInputSchema = z.object({
+  base64: z.string().meta({
+    title: "Base64 字符串",
+  }),
+  fileName: z.string().optional().meta({
+    title: "文件名",
+    description: "可选。填写后会将解码文本同时上传为文件。",
+  }),
+});
+const toTextOutputSchema = z.object({
+  text: z.string().meta({
+    title: "文本",
+  }),
+  url: z.string().optional().meta({
+    title: "文件 URL",
+    description: "填写文件名后返回的文本文件地址。",
+  }),
+});
 const toTextHandler = createToolHandler({
   inputSchema: toTextInputSchema,
   outputSchema: toTextOutputSchema,
   secretSchema: toTextSecretSchema,
   handler: async (input, ctx) => {
     const parsedInput = await toTextInputType.parseAsync(input);
-    const output = await toTextTool(parsedInput);
+    const output = await toTextTool(parsedInput, ctx);
     return toTextOutputType.parseAsync(output);
   },
 });
@@ -98,10 +108,10 @@ const toolSet = defineToolSet({
       en: "Enter a Base64-encoded string and get a text, image, etc.",
       "zh-CN": "输入 Base64 编码的字符串，输出文本、图片等。",
     },
-    version: "0.0.1",
+    version: "0.0.2",
     versionDescription: {
-      en: "Initial version",
-      "zh-CN": "Initial version",
+      en: "Support custom upload file names for file, image, and text outputs",
+      "zh-CN": "支持为文件、图片和文本输出自定义上传文件名",
     },
     tags: ["tools"],
     permission: ["file-upload:allow"],
